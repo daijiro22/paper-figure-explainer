@@ -1,0 +1,6 @@
+{
+  "_about": "scripts/export_site.py の設定の例。site.json に写して自分の値にする。公開前に必ず Cloudflare Access を掛ける（README の「自分たちだけのサイト」）",
+  "worker": "my-paper-shelf",
+  "domain": "papers.example.com",
+  "compatibility_date": "2026-10-01"
+}

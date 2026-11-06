@@ -1,0 +1,11 @@
+pymupdf
+edge-tts>=7.3.1
+pillow
+numpy
+pytest
+fastapi
+uvicorn
+mutagen
+httpx
+anthropic
+pyjwt[crypto]

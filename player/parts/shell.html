@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>論文の図 解説プレーヤー</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+/*@include player.css*/
+</style>
+</head>
+<body>
+<div id="viewport"><div id="stage">
+  <div id="tag"></div><div id="chap"></div><div id="sum"></div><div id="ptitle"></div>
+  <div id="card"><div id="grp">
+    <img id="img" alt="">
+    <svg id="svgDim"></svg>
+    <svg id="svgBand"></svg>
+    <svg id="svgTop"></svg>
+  </div></div>
+  <div id="panel"></div>
+  <div id="sub"></div>
+  <div id="point"><span class="pill">POINT</span><span class="pt"></span></div>
+  <div id="take"></div>
+</div></div>
+
+<div id="menu"><h3>図の一覧</h3><div id="menuList"></div></div>
+<!-- 原文（右のサイドバー。中身は Web 版の原文の画面。開くと舞台が左に縮む） -->
+<div id="docPane">
+  <div id="docHead">
+    <h3>原文</h3>
+    <a id="docTab" target="_blank" rel="noopener">別のタブで開く ↗</a>
+    <button id="btnDocClose" title="原文を閉じる" aria-label="原文を閉じる">×</button>
+  </div>
+  <iframe id="docFrame" title="原文"></iframe>
+</div>
+<div id="controls">
+  <a id="lnkBack" class="btn" hidden title="論文の一覧に戻る">← 論文一覧</a>
+  <button id="btnMenu">図一覧</button>
+  <button id="btnPrevFig">前の図</button><button id="btnNextFig">次の図</button>
+  <button id="btnDoc" hidden title="この図が載っているページを右に開く（手元の Web 版だけ）">原文</button>
+  <a id="lnkNotion" class="btn" hidden target="_blank" rel="noopener" title="Notion の論文のページを開く（手元の Web 版だけ）">Notion</a>
+  <button id="btnPrev">前へ</button><button id="btnPlay">再生</button><button id="btnNext">次へ</button>
+  <div id="dots"></div>
+  <span id="time">0:00 / 0:00</span>
+  <label title="再生スピード">速さ <select id="selRate"></select></label>
+  <label><input type="checkbox" id="chkVoice" checked>音声</label>
+  <label><input type="checkbox" id="chkPanel" checked>根拠パネル</label>
+  <button id="btnFull">全画面</button>
+</div>
+<!-- 読み込みの知らせ。操作バーは狭い画面で横に送るので、バーの外に置く -->
+<div id="wait" role="status" hidden></div>
+
+<div id="loader">
+  <label class="dz" id="dz" for="fileIn">
+    bundle.json をここにドラッグ＆ドロップ<br>またはクリックして選択
+    <small>画像・音声が埋め込み（data URL）済みの bundle.json を選んでください。<br>相対パスの画像は、ファイル選択では読み込めません（build_player.py で埋め込んだ player.html を使う）。</small>
+    <input type="file" id="fileIn" accept=".json,application/json">
+  </label>
+  <div id="loadMsg" style="color:#ff8a80"></div>
+</div>
+
+<script id="bundle" type="application/json"></script>
+<script>
+'use strict';
+/*@include timeline.js*/
+
+/* =====================================================================
+ * ここから DOM（document が無い環境では何もしない）
+ * ===================================================================== */
+if (typeof document !== 'undefined') (function () {
+/*@include stage.js*/
+
+/*@include overlay.js*/
+
+/*@include panel.js*/
+
+/*@include controls.js*/
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>論文の図の解説</title>
+<style>
+  /* NotebookLM のような大きなカードの棚（施主 2026-10-30）。/ は見るだけ、/make は先頭に「PDF を置く」カードと題の編集 */
+  :root {
+    --bg: #f6f7f9; --card: #fff; --ink: #1d2330; --sub: #5d6676; --line: #dfe3ea;
+    --accent: #2457c5; --ok: #1f8a4c; --warn: #b26b00; --warn-bg: #fff4e0; --ng: #c0392b; --ng-bg: #fdecea;
+    --chip: #e9edf3; --thumb: #eef1f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --card: #1b2029; --ink: #e6e9ef; --sub: #9aa3b2; --line: #2c3340;
+      --accent: #7aa2ff; --ok: #4cc27f; --warn: #f0a83a; --warn-bg: #3a2c12; --ng: #ff7b6e; --ng-bg: #3d1d1a;
+      --chip: #2a303b; --thumb: #232933;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.6 "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, sans-serif; }
+  main { max-width: 1400px; margin: 0 auto; padding: 24px 16px 64px; }
+  header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+  h1 { font-size: 22px; margin: 0; font-weight: 600; }
+  .lead { color: var(--sub); margin: 0; font-size: 13px; flex: 1; min-width: 200px; }
+  header a.make { padding: 8px 16px; border-radius: 99px; background: color-mix(in srgb, var(--accent) 15%, transparent);
+                  color: var(--accent); text-decoration: none; font-size: 14px; white-space: nowrap; }
+  /* カードの大きさは固定（施主 2026-10-30「カードサイズは固定をしてほしい」）。題の長さや画面の幅で変わらない */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, 280px); gap: 16px; justify-content: start; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
+          display: flex; flex-direction: column; width: 280px; height: 340px; position: relative; }
+  .card.editing .thumb { display: none; }      /* 題を直している間は、入力欄のために縮小画像を隠す */
+  /* スマホなど 2 列入らない幅では、1 列で幅いっぱいに（高さは固定のまま。左に寄って右が空くのを防ぐ） */
+  @media (max-width: 620px) { .grid { grid-template-columns: 1fr; } .card { width: auto; } }
+  .card.link { cursor: pointer; transition: border-color .15s, transform .15s; }
+  .card.link:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .thumb { height: 170px; flex: none; background: var(--thumb); display: flex; align-items: center; justify-content: center;
+           color: var(--sub); font-size: 13px; border-bottom: 1px solid var(--line); }
+  .thumb img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
+  .body { padding: 12px 14px 12px; display: flex; flex-direction: column; gap: 4px; flex: 1; min-height: 0; overflow: hidden; }
+  .note { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .title { font-weight: 600; font-size: 15px; line-height: 1.45; overflow-wrap: anywhere;
+           display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .who, .jr { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .who { color: var(--ink); } .who b { font-weight: 700; }
+  .jr { color: var(--sub); font-style: italic; }
+  .yr { font-size: 15px; font-weight: 700; color: var(--ink); }
+  .foot { display: flex; align-items: center; gap: 6px; margin-top: auto; padding-top: 6px; font-size: 12px; color: var(--sub); }
+  .foot .sp { flex: 1; }
+  .foot > * { white-space: nowrap; flex: none; }       /* 幅が足りなくても字を縦に折らない */
+  .badge { font-size: 11px; padding: 1px 8px; border-radius: 99px; background: var(--chip); white-space: nowrap; }
+  .badge.active { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+  .badge.failed { background: var(--ng-bg); color: var(--ng); }
+  .badge.private { background: var(--chip); color: var(--sub); }
+  .bar { height: 4px; background: var(--chip); border-radius: 2px; overflow: hidden; margin-top: 4px; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+  .note { font-size: 12px; padding: 6px 8px; border-radius: 6px; margin-top: 4px; }
+  .note.failed { background: var(--ng-bg); color: var(--ng); }
+  .note.info { background: var(--chip); color: var(--sub); }
+  .tools { display: flex; gap: 6px; align-items: center; }
+  .icon { border: 0; background: none; color: var(--sub); cursor: pointer; padding: 2px 6px; border-radius: 6px; font: inherit; font-size: 12px; }
+  .icon:hover { background: var(--chip); color: var(--ink); }
+  a.icon { text-decoration: none; }
+  .edit { display: flex; flex-direction: column; gap: 6px; }
+  .edit textarea { font: inherit; font-size: 14px; padding: 6px 8px; border: 1px solid var(--accent); border-radius: 6px;
+                   background: var(--bg); color: var(--ink); resize: vertical; min-height: 64px; }
+  .edit .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .edit small { color: var(--sub); font-size: 11px; overflow-wrap: anywhere; }
+  button.pri { padding: 6px 14px; border: 0; border-radius: 6px; background: var(--accent); color: #fff; font: inherit; font-size: 13px; cursor: pointer; }
+  button.sec { padding: 6px 12px; border: 0; border-radius: 6px; background: var(--chip); color: var(--ink); font: inherit; font-size: 13px; cursor: pointer; }
+  /* 先頭の「PDF を置く」カード */
+  .new { border: 2px dashed var(--line); background: transparent; padding: 16px; gap: 10px; justify-content: center; }
+  .new.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+  .new .drop { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+               cursor: pointer; color: var(--sub); text-align: center; border-radius: 12px; padding: 12px; }
+  .new .drop:hover { background: var(--chip); }
+  .new .plus { width: 52px; height: 52px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 15%, transparent);
+               color: var(--accent); font-size: 30px; line-height: 52px; text-align: center; }
+  .new .drop b { color: var(--ink); font-size: 15px; }
+  .new .opts { display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--sub); flex-wrap: wrap; }
+  .new .opts input[type=text] { width: 110px; padding: 4px 6px; }
+  .msg { font-size: 12px; min-height: 1em; }
+  .msg.ng { color: var(--ng); }
+  .empty { color: var(--sub); padding: 30px; text-align: center; grid-column: 1 / -1; }
+  /* 検索とタグ（施主 2026-10-30「名前をつけて分けたい。タグで」。タグは /make だけ・自分用） */
+  .filters { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+  #q { max-width: 420px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card);
+       color: var(--ink); font: inherit; font-size: 14px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .chip { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 99px; padding: 6px 14px;
+          font: inherit; font-size: 13px; cursor: pointer; min-height: 34px; }
+  .chip:hover { border-color: var(--accent); }
+  .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip .n { opacity: .7; margin-left: 4px; font-size: 12px; }
+  .chip.add { border-style: dashed; color: var(--sub); }
+  .chip.mini { padding: 4px 10px; min-height: 30px; font-size: 12px; color: var(--sub); }
+  .thumb { position: relative; }
+  .tagbtn { position: absolute; top: 8px; right: 8px; width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--line);
+            background: var(--card); cursor: pointer; font-size: 15px; line-height: 1; opacity: .9; }
+  .tagbtn:hover { border-color: var(--accent); opacity: 1; }
+  .tagrow { position: absolute; left: 8px; bottom: 8px; right: 50px; display: flex; gap: 4px; overflow: hidden; pointer-events: none; }
+  .tagpill { font-size: 11px; background: var(--accent); color: #fff; border-radius: 99px; padding: 1px 9px; white-space: nowrap; flex: none; }
+  #tagpop { position: fixed; z-index: 50; width: 270px; background: var(--card); color: var(--ink); border: 1px solid var(--line);
+            border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.2); padding: 12px; display: none; }
+  #tagpop h4 { margin: 0 0 8px; font-size: 13px; color: var(--sub); font-weight: 600; }
+  #tagpop .list { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
+  #tagpop label { display: flex; gap: 8px; align-items: center; padding: 6px 4px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+  #tagpop label:hover { background: var(--chip); }
+  #tagpop .row { display: flex; gap: 6px; }
+  #tagpop input[type=text] { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px;
+                             background: var(--bg); color: var(--ink); font: inherit; font-size: 13px; }
+  .dest { font-size: 12px; color: var(--accent); }
+  .dest button { border: 0; background: none; color: var(--sub); cursor: pointer; font: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>論文の図の解説</h1>
+    <p class="lead">図ごとに軸の意味と読みどころを、枠・赤丸・音声で解説します。カードを押すと再生画面が開きます。</p>
+    <a class="make" id="tomake" href="/make" hidden>＋ 解説を作る</a>
+  </header>
+  <div class="filters">
+    <input type="search" id="q" placeholder="題・著者・雑誌・年で探す" autocomplete="off">
+    <div class="chips" id="chips" hidden></div>
+  </div>
+  <div class="grid" id="grid"><div class="empty">読み込み中…</div></div>
+  <input type="file" id="file" accept="application/pdf,.pdf" hidden>
+</main>
+<div id="tagpop"></div>
+
+<script>
+const STATUS = {queued: '待ち', extracting: '図を探し中', running: '解析中', done: '完了', failed: '失敗'};
+const ACTIVE = new Set(['queued', 'extracting', 'running']);
+// /make（手元か、Access でログインした人）だけ「PDF を置く」・題の編集・公開の切り替え・やり直しを出す
+const MAKE = location.pathname.replace(/\/+$/, '') === '/make';
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[c]);
+let papers = [], editing = null, lastMsg = {text: '', ng: false};
+// タグ: tags = [{id, name, count}]、sel = 'all' | 'none'（未分類）| タグの id（選んでいるタグはこのブラウザに覚える）
+let tags = [], sel = 'all', pop = null, noDest = false;
+try { sel = localStorage.getItem('pfe.tag') || 'all'; } catch (e) {}
+// 解説から戻ったときのスクロール位置（カードを押すときに覚える。このタブの中だけ・1 回使ったら消す）
+let restoreY = null;
+try { restoreY = sessionStorage.getItem('pfe.scroll'); sessionStorage.removeItem('pfe.scroll'); } catch (e) {}
+const tagName = id => (tags.find(t => t.id === id) || {}).name;
+
+function say(text, ng) { lastMsg = {text: text || '', ng}; const m = $('msg'); if (m) { m.textContent = lastMsg.text; m.className = 'msg' + (ng ? ' ng' : ''); } }
+
+async function post(url, opts) {
+  const r = await fetch(url, {method: 'POST', ...opts});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || j.detail || `エラー（${r.status}）`);
+  return j;
+}
+
+async function sendPdf(file) {
+  if (!file) return;
+  if (!/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') { say('PDF を選んでください', true); return; }
+  say(`${file.name} を送っています…`);
+  try {
+    const j = await post('/make/api/upload', {body: file, headers: {
+      'Content-Type': 'application/pdf', 'X-Filename': encodeURIComponent(file.name),
+      'X-Figs': encodeURIComponent($('figs').value), 'X-No-Tts': $('notts').checked ? '1' : '0',
+      'X-Tags': encodeURIComponent(destTag() || '')}});      // 開いているタグを付ける
+    say(`受け付けました（${j.pid}）`); refresh();
+  } catch (e) { say(e.message, true); }
+}
+
+async function saveMeta(pid, body) {
+  try {
+    await post(`/make/api/papers/${encodeURIComponent(pid)}/meta`,
+               {headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    editing = null; refresh();
+  } catch (e) { alert(e.message); }
+}
+
+function newCard() {
+  // 入力欄は作り直すと打ちかけの文字が消えるので、前の値を引き継ぐ
+  const keep = id => esc($(id)?.value ?? '');
+  return `<div class="card new" id="newcard">
+    <div class="drop" id="drop"><div class="plus">＋</div><b>PDF を置く</b><span style="font-size:12px">ここに落とすか、押して選ぶ</span></div>
+    <div class="opts"><label>図を絞る <input type="text" id="figs" placeholder="例: 1,3" value="${keep('figs')}"></label>
+      <label><input type="checkbox" id="notts" ${$('notts')?.checked ? 'checked' : ''}> 音声なし</label></div>
+    ${destTag() ? `<div class="dest">追加先: ${esc(tagName(destTag()))} <button data-nodest title="タグを付けない">×</button></div>` : ''}
+    <div class="msg${lastMsg.ng ? ' ng' : ''}" id="msg">${esc(lastMsg.text)}</div>
+  </div>`;
+}
+
+function card(p) {
+  const total = p.figs.length, done = p.done_figs.length;
+  const pct = total ? Math.round(100 * (done + p.failed_figs.length) / total) : 0;
+  const active = ACTIVE.has(p.status);
+  // 著者は姓で先頭を太字に、雑誌は略称で（pfe/shelf.py）。全員の名前と正式名はマウスを乗せると出る。
+  // サーバを再起動するまでは p.shelf が無いので、元の値を出す
+  const s = p.shelf || {}, year = String(s.year || p.year || ''), who = s.authors_line || p.authors || '', first = s.first_author || '';
+  const whoHtml = first && who.startsWith(first) ? `<b>${esc(first)}</b>${esc(who.slice(first.length))}` : esc(who);
+  const meta = `<div class="who" title="${esc(p.authors || '')}">${whoHtml}</div>
+      <div class="jr" title="${esc(s.journal || p.journal || '')}">${esc(s.journal_short || p.journal || '')}${MAKE && year ? ` · ${esc(year)}` : ''}</div>`;
+  const thumb = p.thumb ? `<img src="${esc(p.thumb)}?t=${Math.round(p.updated || 0)}" alt="" loading="lazy">`
+                        : esc(active ? '図を準備中…' : (STATUS[p.status] || ''));
+  let badge = '';
+  if (p.status !== 'done') badge = `<span class="badge ${active ? 'active' : esc(p.status)}">${esc(STATUS[p.status] || p.status)}</span>`;
+  else if (MAKE && !p.public) badge = '<span class="badge private">非公開</span>';
+  let note = '';
+  if (p.message && p.status !== 'done') {
+    const nc = p.status === 'failed' ? 'failed' : 'info';
+    note = `<div class="note ${nc}">${esc(p.message)}</div>`;
+  }
+  const eta = active && p.eta_sec ? ` · 残り${Math.max(1, Math.round(p.eta_sec / 60))}分` : '';
+  const when = new Date(p.created * 1000).toLocaleDateString('ja-JP');
+  const name = esc(p.title || p.source || p.pid);
+  let titleHtml = `<div class="title" title="${name}">${name}</div>`;
+  if (MAKE && editing === p.pid) {
+    titleHtml = `<div class="edit" data-stop>
+      <textarea id="ed-${esc(p.pid)}">${name}</textarea>
+      ${p.title_extracted ? `<small>PDF から取った題: ${esc(p.title_extracted)}</small>` : ''}
+      <div class="row"><button class="pri" data-save="${esc(p.pid)}">保存</button>
+        <button class="sec" data-cancel>やめる</button>
+        ${p.title_extracted ? `<button class="sec" data-reset="${esc(p.pid)}">PDF の題に戻す</button>` : ''}</div></div>`;
+  }
+  const tools = MAKE ? `<span class="tools" data-stop>
+      <button class="icon" data-edit="${esc(p.pid)}" title="題を変える">✎ 題</button>
+      ${p.figs.length ? `<a class="icon" href="/make/doc/${encodeURIComponent(p.pid)}" target="_blank" title="PDF のページを開く（手元だけ）">原文</a>` : ''}
+      ${p.notion ? `<a class="icon" href="/make/notion/${encodeURIComponent(p.pid)}" target="_blank" rel="noopener" title="Notion の論文のページを開く">Notion</a>` : ''}
+      ${p.status === 'done' ? `<button class="icon" data-pub="${esc(p.pid)}" data-v="${p.public ? 0 : 1}" title="公開サイトに載せるか">${p.public ? '公開' : '非公開'}</button>` : ''}
+      ${p.status === 'failed' ? `<button class="icon" data-retry="${esc(p.pid)}">やり直す</button>` : ''}
+    </span>` : '';
+  const tagUi = MAKE ? `<button class="tagbtn" data-tagpop="${esc(p.pid)}" title="タグを付ける・外す">🏷</button>
+      <div class="tagrow">${(p.tags || []).map(t => `<span class="tagpill">${esc(t.name)}</span>`).join('')}</div>` : '';
+  return `<div class="card${p.player ? ' link' : ''}${MAKE && editing === p.pid ? ' editing' : ''}" data-open="${esc(p.player || '')}">
+    <div class="thumb">${thumb}${tagUi}</div>
+    <div class="body">
+      ${titleHtml}
+      <div class="meta">${meta}</div>
+      ${active && total ? `<div class="bar"><i style="width:${pct}%"></i></div>` : ''}
+      ${note}
+      <div class="foot" title="登録 ${esc(when)}">${badge}<span>${total ? `図 ${done}/${total}` : ''}${eta}</span><span class="sp"></span>${MAKE ? tools : `<span class="yr">${esc(year)}</span>`}</div>
+    </div>
+  </div>`;
+}
+
+// いま開いているタグ（PDF を置いたときに付ける）。「すべて」「未分類」のときと、× で外したときは無し
+function destTag() { return MAKE && !noDest && tags.some(t => t.id === sel) ? sel : null; }
+
+// 検索とタグで絞る
+function shown() {
+  // 空白で区切ると全部を含むものだけ（Meng 2018 のように探せる）。画面に出ていない正式名・全員の名前・DOI でも当たる
+  const words = ($('q').value || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+  return papers.filter(p => {
+    if (MAKE && sel === 'none' && (p.tags || []).length) return false;
+    if (MAKE && sel !== 'all' && sel !== 'none' && !(p.tags || []).some(t => t.id === sel)) return false;
+    const s = p.shelf || {};
+    const hay = [p.title, p.authors, p.journal, p.year, p.doi, p.pid, s.search, s.year].join(' ').toLowerCase();
+    return words.every(w => hay.includes(w));
+  });
+}
+
+function renderChips() {
+  if (!MAKE) return;
+  if (sel !== 'all' && sel !== 'none' && !tags.some(t => t.id === sel)) sel = 'all';   // 消したタグを開いていた
+  const none = papers.filter(p => !(p.tags || []).length).length;
+  const chip = (id, label, n) => `<button class="chip${sel === id ? ' on' : ''}" data-sel="${esc(id)}">${esc(label)}${n != null ? `<span class="n">${n}</span>` : ''}</button>`;
+  let h = chip('all', 'すべて', papers.length) + chip('none', '未分類', none) + tags.map(t => chip(t.id, t.name, t.count)).join('');
+  h += '<button class="chip add" data-newtag>＋ タグ</button>';
+  if (tags.some(t => t.id === sel)) {
+    h += `<button class="chip mini" data-rename="${esc(sel)}">名前を変える</button><button class="chip mini" data-deltag="${esc(sel)}">このタグを消す</button>`;
+  }
+  $('chips').innerHTML = h;
+  $('chips').hidden = false;
+}
+
+function render() {
+  renderChips();
+  const list = shown();
+  const cards = list.map(card).join('');
+  const empty = papers.length ? '<div class="empty">当てはまる論文がありません</div>' : '<div class="empty">まだありません</div>';
+  $('grid').innerHTML = (MAKE ? newCard() : '') + (cards || (MAKE && !papers.length ? '' : empty));
+  if (MAKE) wireNew();
+  if (editing) { const t = $('ed-' + editing); if (t) { t.focus(); t.select(); } }
+}
+
+function wireNew() {
+  const nc = $('newcard');
+  $('drop').onclick = () => $('file').click();
+  nc.ondragover = e => { e.preventDefault(); nc.classList.add('over'); };
+  nc.ondragleave = () => nc.classList.remove('over');
+  nc.ondrop = e => { e.preventDefault(); nc.classList.remove('over'); sendPdf(e.dataTransfer.files[0]); };
+}
+
+let timer = null;
+async function refresh() {
+  clearTimeout(timer);
+  try {
+    // /make はタグつきの一覧（自分用）。見るだけの / はタグを出さない
+    papers = await (await fetch(MAKE ? '/make/api/papers' : '/api/papers')).json();
+    if (MAKE) tags = await (await fetch('/make/api/tags')).json();
+    // 打ちかけの入力を消さないよう、入力中・編集中・タグのパネルを開いている間は描き直さない
+    const typing = document.activeElement && document.activeElement.id === 'figs';
+    if (!typing && !editing && !pop) render();
+    if (restoreY !== null) { window.scrollTo(0, +restoreY); restoreY = null; }   // カードの高さは固定なので、描いた直後に戻せる
+  } catch (e) { $('grid').innerHTML = `<div class="empty">一覧を読めません: ${esc(e.message)}</div>`; }
+  timer = setTimeout(refresh, papers.some(p => ACTIVE.has(p.status)) ? 3000 : 15000);
+}
+
+// ---- タグの操作 ----
+const json = body => ({headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+function choose(id) { sel = id; noDest = false; try { localStorage.setItem('pfe.tag', id); } catch (e) {} render(); }
+
+$('chips').onclick = async e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const ds = b.dataset;
+  try {
+    if (ds.sel) { choose(ds.sel); return; }
+    if (b.hasAttribute('data-newtag')) {
+      const name = prompt('新しいタグの名前'); if (!name || !name.trim()) return;
+      const t = await post('/make/api/tags', json({name}));
+      await refresh(); choose(t.id); return;
+    }
+    if (ds.rename) {
+      const name = prompt('タグの新しい名前', tagName(ds.rename) || ''); if (!name || !name.trim()) return;
+      await post(`/make/api/tags/${encodeURIComponent(ds.rename)}`, json({name})); refresh(); return;
+    }
+    if (ds.deltag) {
+      if (!confirm(`タグ「${tagName(ds.deltag)}」を消しますか？（論文は消えません。付いていたタグが外れるだけです）`)) return;
+      await post(`/make/api/tags/${encodeURIComponent(ds.deltag)}`, json({deleted: true}));
+      choose('all'); refresh(); return;
+    }
+  } catch (err) { alert(err.message); }
+};
+
+// カードのタグのパネル（カードの外に開く。固定サイズのカードを崩さない）
+function openPop(pid, btn) {
+  const p = papers.find(x => x.pid === pid); if (!p) return;
+  pop = {pid, chosen: new Set((p.tags || []).map(t => t.id))};
+  drawPop();
+  const r = btn.getBoundingClientRect(), el = $('tagpop');
+  el.style.display = 'block';
+  el.style.left = Math.max(8, Math.min(innerWidth - 280, r.right - 270)) + 'px';
+  el.style.top = Math.min(innerHeight - el.offsetHeight - 8, r.bottom + 6) + 'px';
+}
+function drawPop() {
+  $('tagpop').innerHTML = `<h4>タグを付ける・外す</h4>
+    <div class="list">${tags.map(t => `<label><input type="checkbox" data-t="${esc(t.id)}" ${pop.chosen.has(t.id) ? 'checked' : ''}> ${esc(t.name)}</label>`).join('')
+      || '<span style="font-size:13px;color:var(--sub)">まだタグがありません</span>'}</div>
+    <div class="row" style="margin-bottom:8px"><input type="text" id="poptag" placeholder="新しいタグ"><button class="sec" data-popnew>作る</button></div>
+    <div class="row"><button class="pri" data-popok>決める</button><button class="sec" data-popno>やめる</button></div>`;
+}
+function closePop() { pop = null; $('tagpop').style.display = 'none'; render(); }
+$('tagpop').onclick = async e => {
+  const t = e.target;
+  if (t.dataset?.t) { t.checked ? pop.chosen.add(t.dataset.t) : pop.chosen.delete(t.dataset.t); return; }
+  try {
+    if (t.hasAttribute('data-popnew')) {
+      const name = $('poptag').value; if (!name.trim()) return;
+      const nt = await post('/make/api/tags', json({name}));
+      tags = await (await fetch('/make/api/tags')).json();
+      pop.chosen.add(nt.id); drawPop(); return;
+    }
+    if (t.hasAttribute('data-popok')) {
+      await post(`/make/api/papers/${encodeURIComponent(pop.pid)}/tags`, json({tags: [...pop.chosen]}));
+      pop = null; $('tagpop').style.display = 'none'; refresh(); return;
+    }
+    if (t.hasAttribute('data-popno')) closePop();
+  } catch (err) { alert(err.message); }
+};
+$('tagpop').onkeydown = e => { if (e.key === 'Enter' && e.target.id === 'poptag') { e.preventDefault(); $('tagpop').querySelector('[data-popnew]').click(); } };
+document.addEventListener('mousedown', e => { if (pop && !e.target.closest('#tagpop') && !e.target.closest('[data-tagpop]')) closePop(); });
+$('q').oninput = () => render();
+
+$('tomake').hidden = MAKE;
+$('file').onchange = e => { sendPdf(e.target.files[0]); e.target.value = ''; };
+$('grid').onclick = async e => {
+  const t = e.target, ds = t.dataset || {};
+  if (ds.tagpop) { e.stopPropagation(); pop ? closePop() : openPop(ds.tagpop, t); return; }
+  if (t.hasAttribute?.('data-nodest')) { noDest = true; render(); return; }
+  if (ds.edit) { editing = ds.edit; render(); return; }
+  if (t.hasAttribute?.('data-cancel')) { editing = null; render(); return; }
+  if (ds.save) { saveMeta(ds.save, {title: $('ed-' + ds.save).value}); return; }
+  if (ds.reset) { saveMeta(ds.reset, {title: ''}); return; }
+  if (ds.pub) { saveMeta(ds.pub, {public: ds.v === '1'}); return; }
+  if (ds.retry) { try { await post(`/make/api/papers/${encodeURIComponent(ds.retry)}/retry`); refresh(); } catch (err) { alert(err.message); } return; }
+  if (t.closest('[data-stop]') || t.closest('#newcard')) return;
+  const c = t.closest('.card.link');
+  if (c && c.dataset.open) {     // 解説は同じタブで開く（施主 2026-11-05）。戻るのは解説の「← 論文一覧」
+    try { sessionStorage.setItem('pfe.scroll', String(window.scrollY)); } catch (e) {}
+    location.href = c.dataset.open;
+  }
+};
+document.addEventListener('keydown', e => {
+  if (pop && e.key === 'Escape') { closePop(); return; }
+  if (!editing) return;
+  if (e.key === 'Escape') { editing = null; render(); }
+  if (e.key === 'Enter' && !e.shiftKey && e.target.id === 'ed-' + editing) { e.preventDefault(); saveMeta(editing, {title: e.target.value}); }
+});
+refresh();
+</script>
+</body>
+</html>

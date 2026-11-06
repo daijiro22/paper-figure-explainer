@@ -1,0 +1,22 @@
+node_modules/
+.vercel/
+__pycache__/
+*.pyc
+.env*
+Thumbs.db
+# 論文の写し・切り出した図・音声・動画（著作物と生成物。work/<paper_id>/ に入る）
+work/
+*.mp4
+# Crossref/OpenAlex の応答の控え
+cache/
+# 実物の論文を使うテストの置き場（機械ごと。tests/_paths.py）
+tests/papers_root.txt
+
+# Cloudflare に載せる組み立て（scripts/export_site.py の生成物）
+_cf_build/
+
+# Claude Code の各自の許可設定
+.claude/settings.local.json
+
+# 自分のサイトの設定（site.example.json を写して作る）
+site.json

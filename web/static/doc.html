@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>原文</title>
+<style>
+  /* 原文の画面（手元だけ）: 左にページの縮小一覧、中央に大きなページを縦に並べる（Chrome の PDF ビューアに寄せた）。
+     ページの上の図は枠で示し、押すとその図の解説へ。UI 第 3 段（Codex と相談・施主 2026-10-30） */
+  :root { --bg: #e8eaed; --side: #f6f7f9; --ink: #1d2330; --sub: #5d6676; --line: #d5d9e0; --accent: #2457c5; --bar: #fff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1216; --side: #171b22; --ink: #e6e9ef; --sub: #9aa3b2; --line: #2c3340; --accent: #7aa2ff; --bar: #1b2029; }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { display: grid; grid-template-rows: 52px 1fr; grid-template-columns: 200px 1fr; background: var(--bg); color: var(--ink);
+         font: 14px/1.5 "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, sans-serif; }
+  header { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; padding: 0 14px; background: var(--bar);
+           border-bottom: 1px solid var(--line); min-width: 0; }
+  header a { color: var(--accent); text-decoration: none; white-space: nowrap; font-size: 13px; }
+  header .t { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  header .pg { color: var(--sub); font-size: 13px; white-space: nowrap; }
+  header a.play { padding: 6px 14px; border-radius: 99px; background: var(--accent); color: #fff; }
+  aside { overflow-y: auto; background: var(--side); border-right: 1px solid var(--line); padding: 12px 18px; }
+  .th { display: block; margin: 0 auto 16px; cursor: pointer; text-align: center; color: var(--sub); font-size: 12px; }
+  .th .im { position: relative; background: #fff; border: 3px solid transparent; border-radius: 4px; overflow: hidden; }
+  .th.on .im { border-color: var(--accent); }
+  .th img { display: block; width: 100%; }
+  .th .dot { position: absolute; border: 2px solid var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent); }
+  main { overflow-y: auto; padding: 18px; }
+  .page { position: relative; margin: 0 auto 18px; max-width: 1100px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+  .page img { display: block; width: 100%; height: 100%; }
+  .fig { position: absolute; border: 2px solid transparent; border-radius: 6px; cursor: pointer; transition: border-color .15s, background .15s; }
+  .fig:hover, .fig.hl { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+  .fig .tag { position: absolute; left: -2px; top: -26px; padding: 2px 10px; border-radius: 6px 6px 6px 0; background: var(--accent);
+              color: #fff; font-size: 12px; white-space: nowrap; opacity: 0; transition: opacity .15s; }
+  .fig:hover .tag, .fig.hl .tag { opacity: 1; }
+  .fig.none { cursor: default; }
+  .fig.none:hover { border-color: #9aa3b2; background: transparent; }
+  .msg { padding: 40px; text-align: center; color: var(--sub); grid-column: 1 / -1; }
+  /* 解説の右のサイドバーに埋め込んだとき（?embed=1）: ページだけを出す。見出しと閉じるは解説の側にある */
+  html.embed body { grid-template-rows: 1fr; grid-template-columns: 1fr; }
+  html.embed header, html.embed aside { display: none; }
+  html.embed main { padding: 8px; }
+  /* スマホの幅では左の一覧を隠し、ページだけを幅いっぱいに */
+  @media (max-width: 620px) { body { grid-template-columns: 1fr; } aside { display: none; } main { padding: 8px; }
+                              header .pg { display: none; } }
+</style>
+</head>
+<body>
+<header>
+  <a href="/make">← 棚へ</a>
+  <span class="t" id="title">読み込み中…</span>
+  <span class="pg" id="pg"></span>
+  <a class="play" id="play" href="#" hidden>解説を見る</a>
+</header>
+<aside id="side"></aside>
+<main id="main"></main>
+
+<script>
+const pid = decodeURIComponent(location.pathname.split('/').filter(Boolean).pop());
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[c]);
+const api = `/make/api/papers/${encodeURIComponent(pid)}`;
+let info = null, cur = 1;
+// 解説の右のサイドバーの中か。?embed=1 の URL を単独で開いたときは、普通の原文の画面にする
+const EMBED = new URLSearchParams(location.search).get('embed') === '1' && window.parent !== window;
+if (EMBED) document.documentElement.classList.add('embed');
+
+// 図を押したら、その図の解説へ（player は ?fig=fig3 でその図から始まる）
+function playerUrl(fid) { return `${info.player}?fig=${encodeURIComponent(fid)}`; }
+
+function figBoxes(n, big) {
+  return info.figures.filter(f => f.page === n).map(f => {
+    const [x0, y0, x1, y1] = f.box;
+    const style = `left:${x0 * 100}%;top:${y0 * 100}%;width:${(x1 - x0) * 100}%;height:${(y1 - y0) * 100}%`;
+    if (!big) return `<i class="dot" style="${style}"></i>`;
+    const can = f.has_player && info.player;
+    return `<div class="fig${can ? '' : ' none'}" id="box-${esc(f.id)}" data-fid="${can ? esc(f.id) : ''}" style="${style}"
+      title="${esc(f.label)}${can ? ' の解説を見る' : '（解説はまだ無い）'}"><span class="tag">${esc(f.label)}${can ? ' ▶ 解説' : ''}</span></div>`;
+  }).join('');
+}
+
+function build() {
+  document.title = `原文 · ${info.title}`;
+  $('title').textContent = info.title;
+  if (info.player) { $('play').hidden = false; $('play').href = info.player; }
+  const side = [], main = [];
+  for (let n = 1; n <= info.n_pages; n++) {
+    const ar = info.aspect[n - 1];
+    side.push(`<div class="th" data-p="${n}" id="th-${n}"><div class="im" style="aspect-ratio:1/${ar}">
+      <img loading="lazy" src="${api}/page/${n}?w=240" alt="">${figBoxes(n, false)}</div>${n}</div>`);
+    main.push(`<div class="page" id="p-${n}" data-p="${n}" style="aspect-ratio:1/${ar}">
+      <img loading="lazy" src="${api}/page/${n}?w=1400" alt="${n} ページ">${figBoxes(n, true)}</div>`);
+  }
+  $('side').innerHTML = side.join('');
+  $('main').innerHTML = main.join('');
+  // いま見ているページを左の一覧で光らせる
+  const io = new IntersectionObserver(es => {
+    const vis = es.filter(e => e.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+    if (vis) setCur(+vis.target.dataset.p, false);
+  }, {root: $('main'), threshold: [0.25, 0.5, 0.75]});
+  document.querySelectorAll('.page').forEach(p => io.observe(p));
+  applyHash();
+}
+
+// 「この図の原文を見る」から来たとき: #fig=fig3 でその図のページへ跳び、図を光らせる（サイドバーでは解説が図を変えるたびに呼ばれる）
+function applyHash() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  const f = h.get('fig') && info.figures.find(x => x.id === h.get('fig'));
+  if (f) { goto(f.page); const b = $('box-' + f.id); if (b) { b.classList.add('hl'); setTimeout(() => b.classList.remove('hl'), 4000); } }
+  else if (h.get('p')) goto(+h.get('p'));
+  else setCur(1, false);
+}
+
+function setCur(n, scrollSide = true) {
+  cur = n;
+  $('pg').textContent = `${n} / ${info.n_pages} ページ`;
+  document.querySelectorAll('.th.on').forEach(t => t.classList.remove('on'));
+  const t = $('th-' + n);
+  if (t) { t.classList.add('on'); if (scrollSide) t.scrollIntoView({block: 'nearest'}); }
+}
+
+function goto(n) {
+  n = Math.max(1, Math.min(info.n_pages, n));
+  $('p-' + n).scrollIntoView({block: 'start'});
+  setCur(n);
+}
+
+$('side').onclick = e => { const t = e.target.closest('.th'); if (t) goto(+t.dataset.p); };
+$('main').onclick = e => {
+  const b = e.target.closest('.fig');
+  if (!b || !b.dataset.fid) return;
+  // サイドバーの中で解説へ移るとサイドバーに解説が開いてしまうので、外の解説に図を切り替えてもらう
+  // URL の # も押した図に合わせる（ずれたままだと、解説が前の図へ戻したときに # が変わらず、ページが動かない）
+  if (EMBED) {
+    history.replaceState(null, '', '#fig=' + encodeURIComponent(b.dataset.fid));
+    parent.postMessage({pfe: 'gotoFig', fig: b.dataset.fid}, location.origin);
+  } else location.href = playerUrl(b.dataset.fid);
+};
+window.addEventListener('hashchange', () => { if (info) applyHash(); });
+document.addEventListener('keydown', e => {
+  if (!info) return;
+  if (e.key === 'PageDown' || (e.key === 'ArrowRight' && !e.altKey)) { e.preventDefault(); goto(cur + 1); }
+  if (e.key === 'PageUp' || (e.key === 'ArrowLeft' && !e.altKey)) { e.preventDefault(); goto(cur - 1); }
+});
+
+fetch(api + '/pages').then(async r => {
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `エラー（${r.status}）`);
+  info = await r.json(); build();
+}).catch(e => { document.body.innerHTML = `<div class="msg">原文を開けません: ${esc(e.message)}</div>`; });
+</script>
+</body>
+</html>
