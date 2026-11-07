@@ -24,6 +24,7 @@ JOURNAL_ABBR = {
     "biotechnology for biofuels": "Biotechnol. Biofuels",
     "canadian journal of chemistry": "Can. J. Chem.",
     "cellulose": "Cellulose",
+    "chemical engineering science": "Chem. Eng. Sci.",
     "chemsuschem": "ChemSusChem",
     "coatings": "Coatings",
     "composites part a applied science and manufacturing": "Compos. Part A Appl. Sci. Manuf.",
@@ -34,6 +35,7 @@ JOURNAL_ABBR = {
     "frontiers in chemistry": "Front. Chem.",
     "green chemistry": "Green Chem.",
     "holzforschung": "Holzforschung",
+    "industrial and engineering chemistry": "Ind. Eng. Chem.",
     "industrial crops and products": "Ind. Crops Prod.",
     "international journal of molecular sciences": "Int. J. Mol. Sci.",
     "japan tappi journal": "Japan TAPPI Journal",       # Crossref の登録は J. Tappi J. で、定まった略称が確かめられない
@@ -42,9 +44,12 @@ JOURNAL_ABBR = {
     "journal of analytical and applied pyrolysis": "J. Anal. Appl. Pyrolysis",
     "journal of chemical engineering and industrial biotechnology": "JCEIB",     # 論文の見出しにある雑誌自身の略称
     "journal of cleaner production": "J. Clean. Prod.",
+    "journal of molecular liquids": "J. Mol. Liq.",
     "journal of the american chemical society": "J. Am. Chem. Soc.",
     "journal of wood chemistry and technology": "J. Wood Chem. Technol.",
     "journal of wood science": "J. Wood Sci.",
+    "molecules": "Molecules",
+    "nature": "Nature",
     "paper trade journal": "Pap. Trade J.",
     "physical chemistry chemical physics": "Phys. Chem. Chem. Phys.",
     "plant physiology": "Plant Physiol.",
@@ -58,6 +63,8 @@ JOURNAL_ABBR = {
     "rsc advances": "RSC Adv.",
     "rsc sustainability": "RSC Sustain.",
     "small structures": "Small Struct.",
+    "the journal of chemical physics": "J. Chem. Phys.",
+    "the journal of physical chemistry b": "J. Phys. Chem. B",
     "the plant journal": "Plant J.",
     "wood science and technology": "Wood Sci. Technol.",
 }

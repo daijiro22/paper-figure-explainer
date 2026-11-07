@@ -25,6 +25,12 @@ def load_figs(pid):
     return d if isinstance(d, list) else d["figures"]
 
 
+def target_ids(pid):
+    """解説の対象の図表（scripts/run.py の targets と同じ条件）。Scheme は対象外なので「欠け」に数えない。"""
+    return [f["id"] for f in load_figs(pid)
+            if f["id"].startswith("fig") or (f["id"].startswith("table") and f.get("clip"))]
+
+
 def norm(s):
     """照合用に空白・ハイフン・記号の違いをならす。"""
     s = s.replace("­", "").replace("◦", "°")
@@ -98,6 +104,11 @@ def crop_suspects(pid, figs):
     doc = pymupdf.open(WORK / pid / "source.pdf")
     out = []
     for f in figs:
+        # 枠がページの外: 座標の取り違え（Jakab 1997 table2 は正立させた画面の座標で書かれ、表の一部しか写らなかった）
+        if f.get("clip"):
+            r, c = doc[int(f["page"]) - 1].rect, f["clip"]
+            if c[0] < r.x0 - 1 or c[1] < r.y0 - 1 or c[2] > r.x1 + 1 or c[3] > r.y1 + 1:
+                out.append(f"枠がページの外 {f['id']} p{f['page']}: {c}（rotate があっても clip は正立させる前のページの座標）")
         if not f.get("clip") or f.get("rotate"):
             continue
         page = doc[int(f["page"]) - 1]
@@ -193,7 +204,7 @@ def after(pids):
         corpus[pid] = norm(" ".join(p["text"] for p in t["paragraphs"]) + " " + caps + " " + ab)
     for pid in pids:
         w = WORK / pid
-        ids = [f["id"] for f in load_figs(pid)]
+        ids = target_ids(pid)
         miss = [i for i in ids if not (w / "fig" / f"{i}.analysis.json").exists()]
         has_ov = (w / "fig" / "overview.analysis.json").exists()
         bundle = json.loads((w / "bundle.json").read_text(encoding="utf-8"))
@@ -234,7 +245,7 @@ def sheets(pids):
     col = ["#e6194b", "#3cb44b", "#4363d8", "#f58231", "#911eb4", "#00a0a0", "#c000c0", "#808000", "#804000", "#000080"]
     tile_w, tile_h, ncol, per = 620, 470, 3, 6
     for pid in pids:
-        ids = [f["id"] for f in load_figs(pid)]
+        ids = target_ids(pid)
         for n in range(0, len(ids), per):
             part = ids[n:n + per]
             rows = (len(part) + ncol - 1) // ncol
