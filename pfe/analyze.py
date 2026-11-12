@@ -197,6 +197,21 @@ def _norm_space(s: str) -> str:
 MIN_QUOTE = 12  # 正規化後の引用の最短の長さ（"TG" や " " のような何にでも一致する引用を根拠と認めない）
 
 
+def match_key(s: str) -> str:
+    """引用の照合用: 全角の数字・記号を半角に揃え（NFKC）、空白を全部消す。
+    原文は改行の位置に空白が入り（日本語の「関与 して」、英語の行末ハイフン「indi- cates」）、
+    モデルは数字を全角で写すことがあり、本当に原文にある引用が [要確認] になっていた
+    （2026-11-10 の結論で nishikiori2015 の 5 ステップ・lee1990 の 1 ステップ）。"""
+    import unicodedata
+    return re.sub(r"\s+", "", unicodedata.normalize("NFKC", _norm_space(s)))
+
+
+def quote_ok(quote: str, key_src: str) -> bool:
+    """引用が原文（match_key 済み）に実在するか。長さは今までどおり空白を 1 つに詰めた形で測る
+    （空白を消したぶん短い引用が通るようにはしない）。図・概要・結論の照合はみなこれを使う。"""
+    return len(_norm_space(quote)) >= MIN_QUOTE and match_key(quote) in key_src
+
+
 def _numbers(text: str) -> set[str]:
     """文の中の数値（2 桁以上か小数）を取り出す。1 桁は「2 つの線」のような言い回しと区別できないので見ない。"""
     import unicodedata
@@ -273,7 +288,7 @@ def check_analysis(a: dict, geom: dict, sources: dict[str, str]) -> list[str]:
         for c in p.get("curves", []):
             if c["id"] not in curves:
                 errs.append(f"curves: {c['id']} は存在しない曲線")
-    norm_src = {k: _norm_space(v) for k, v in sources.items()}
+    norm_src = {k: match_key(v) for k, v in sources.items()}
     tv = tick_values_of(a)
     # 番号 → 外接矩形（PDF 座標）。寄る範囲と囲む所の食い違いを見るのに使う
     bbox_of = {g["id"]: g["bbox"] for g in geom.get("regions", [])}
@@ -309,7 +324,7 @@ def check_analysis(a: dict, geom: dict, sources: dict[str, str]) -> list[str]:
                 errs.append(f"steps[{i}]: 根拠の出典 {ev['source']} は存在しない（caption か para:番号。表なら table）")
             elif len(_norm_space(ev["quote"])) < MIN_QUOTE:
                 errs.append(f"steps[{i}]: 引用「{ev['quote']}」が短すぎる（{MIN_QUOTE} 字以上の連続した原文を写す）")
-            elif _norm_space(ev["quote"]) not in src:
+            elif not quote_ok(ev["quote"], src):
                 errs.append(f"steps[{i}]: 引用「{ev['quote'][:40]}…」が {ev['source']} の原文に見つからない（原文をそのまま写す）")
         bad = unsupported_numbers(st, sources, tv)
         if bad:
@@ -484,7 +499,7 @@ def _first_answer_object(text: str) -> dict | None:
     return None
 
 
-def call_api(prompt: str, images: list[Path], schema_path: Path, out_path: Path, timeout: int = 900) -> dict:
+def call_api(prompt: str, images: list[Path], schema_path: Path, out_path: Path, timeout: int = 900, model: str | None = None) -> dict:
     """Claude API に画像 2 枚を添付して呼ぶ（施主 2026-10-30「Claude の API は使ってよい」）。
     鍵は環境変数 ANTHROPIC_API_KEY か ~/.config/pfe/env（コードに書かない）。
     答えの形はスキーマを依頼文に添えて頼み、検査は analyze() のスキーマ＋意味の検査に任せる
@@ -504,7 +519,7 @@ def call_api(prompt: str, images: list[Path], schema_path: Path, out_path: Path,
     client = anthropic.Anthropic(timeout=timeout, max_retries=2)
     try:
         with client.beta.messages.stream(
-            model=API_MODEL, max_tokens=64000,
+            model=model or API_MODEL, max_tokens=64000,     # model: 文字だけの段は TEXT_MODEL（pfe/overview.py）
             thinking={"type": "adaptive"},
             output_config={"effort": "medium"},
             betas=["server-side-fallback-2026-07-01"], fallbacks="default",

@@ -65,7 +65,7 @@ def _to_data_url(rel: str, base: Path) -> str:
 def _embed(bundle: dict, base: Path) -> int:
     """figures[].img と steps[].audio を data URL に置き換える。置換した数を返す"""
     n = 0
-    for fig in bundle.get("figures", []) + ([bundle["overview"]] if bundle.get("overview") else []):
+    for fig in bundle.get("figures", []) + [bundle[k] for k in ("overview", "conclusion") if bundle.get(k)]:
         img = fig.get("img")
         if isinstance(img, str) and img and not _is_inline_or_remote(img):
             fig["img"] = _to_data_url(img, base)

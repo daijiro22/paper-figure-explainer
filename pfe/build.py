@@ -1,6 +1,6 @@
 """bundle.json を組み立てる段: 図・解析・画素の図形・根拠の検査・引用・音声を 1 つにまとめる。
 
-根拠の検査（捏造防止）: evidence の quote が出典の原文に実在するかを空白を正規化して照合する。
+根拠の検査（捏造防止）: evidence の quote が出典の原文に実在するかを、全角・半角と空白の違いを無視して照合する。
 - 実在しない quote は verified=false。
 - kind=fact なのに検証済みの根拠が 1 つも無いステップは kind=unverified（画面に [要確認]）。
 """
@@ -11,9 +11,33 @@ import re
 from pathlib import Path
 
 
-def _norm(s: str) -> str:
-    s = s.replace("­", "").replace("◦", "°")
-    return re.sub(r"\s+", " ", s).strip().lower()
+def _kind(fid: str) -> str:
+    """id の種類（fig・table・scheme・補足の tableS は別の列）。"""
+    m = re.match(r"[a-zA-Z]+", fid)
+    return m.group(0) if m else fid
+
+
+def _pos(f: dict) -> tuple:
+    """ページの中で読む順の位置（2 段組みは左の段 → 右の段。下半分に載る全幅の図は両方の段のあと）。"""
+    y = (f.get("clip") or [0, 0, 0, 0])[1]
+    layout = f.get("layout")
+    col = 1 if layout == "right" else (2 if layout == "full" and y > 400 else 0)   # 400 pt ≒ ページの半分
+    page = f.get("page")
+    return (page if page is not None else 10 ** 6, col, y)
+
+
+def reading_order(figs: list[dict]) -> list[dict]:
+    """図・表・Scheme を、ページの若い順に並べる（施主 2026-11-10「図のあとに Table を出されても前後して分かりづらい」）。
+    種類ごとの順（図 1→2→3、表 1→表 1 の続き→表 2）は figures.json のまま崩さず、種類どうしだけを
+    載っている位置で混ぜる（続きの表が座標では親より上に来る論文がある・smith2016）。"""
+    queues: dict[str, list[dict]] = {}
+    for f in figs:
+        queues.setdefault(_kind(f["id"]), []).append(f)
+    out = []
+    while any(queues.values()):
+        k = min((k for k, q in queues.items() if q), key=lambda k: _pos(queues[k][0]))
+        out.append(queues[k].pop(0))
+    return out
 
 
 def para_where(text: dict) -> dict[str, str]:
@@ -29,15 +53,14 @@ def para_where(text: dict) -> dict[str, str]:
 
 
 def verify_steps(steps: list[dict], sources: dict[str, str], where: dict[str, str], tick_values: set | None = None) -> list[dict]:
-    from pfe.analyze import MIN_QUOTE, unsupported_numbers
-    norm_src = {k: _norm(v) for k, v in sources.items()}
+    from pfe.analyze import match_key, quote_ok, unsupported_numbers
+    norm_src = {k: match_key(v) for k, v in sources.items()}
     out = []
     for st in steps:
         evs = []
         for ev in st.get("evidence", []):
             src = norm_src.get(ev["source"], "")
-            q = _norm(ev.get("quote") or "")
-            ok = len(q) >= MIN_QUOTE and q in src
+            ok = quote_ok(ev.get("quote") or "", src)
             loc = {"caption": "キャプション", "table": "表の中身"}.get(ev["source"]) or \
                 where.get(ev["source"].split(":", 1)[-1], ev["source"])
             evs.append({"source": ev["source"], "where": loc, "quote": ev["quote"], "verified": ok})
@@ -82,8 +105,11 @@ def figure_entry(fig: dict, img_rel: str, size: tuple[int, int], analysis: dict,
     }
 
 
-def write_bundle(path: Path, paper: dict, figures: list[dict], overview: dict | None = None) -> None:
+def write_bundle(path: Path, paper: dict, figures: list[dict], overview: dict | None = None,
+                 conclusion: dict | None = None) -> None:
     b = {"paper": paper, "figures": figures}
     if overview:
         b["overview"] = overview          # 概要（アブストラクトの解説）。player が図の列の先頭に並べる
+    if conclusion:
+        b["conclusion"] = conclusion      # 結論（論文全体のまとめ）。player が図の列の最後に並べる
     path.write_text(json.dumps(b, ensure_ascii=False, indent=1), encoding="utf-8")

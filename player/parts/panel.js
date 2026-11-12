@@ -18,7 +18,7 @@ function ensureFigure(fi) {
   // trace / axis の光り（svgTop 内の defs は buildOverlay が消すので別に保持するため、ここでは dim 側 svg に置く）
   dd.querySelector('defs').insertAdjacentHTML('beforeend', '<filter id="glow" filterUnits="userSpaceOnUse" x="0" y="0" width="' + W + '" height="' + H + '"><feGaussianBlur stdDeviation="9"/></filter>');
   var off = figures.length && figures[0].isOverview ? 1 : 0;     // 概要は番号を持たず、図は 01 から
-  $('tag').textContent = fig.isOverview ? '概要' : ('0' + (fi + 1 - off)).slice(-2);
+  $('tag').textContent = fig.isOverview ? '概要' : fig.isConclusion ? '結論' : ('0' + (fi + 1 - off)).slice(-2);
   $('chap').textContent = fig.label || ('図 ' + (fi + 1));
   $('chap').style.left = (48 + 28 + ($('tag').offsetWidth || 64) + 16 - 28) + 'px';
   $('sum').textContent = fig.summary_ja || '';
@@ -58,7 +58,9 @@ function abstractHtml(text, evidence) {
 function buildPanel(fi, st) {
   var fig = figures[fi], h = '';
   var step = st.type === 'step' ? fig.steps[st.stepIndex] : null;
-  var isAbs = fig.isOverview && fig.abstract_text;   // 概要: 根拠の抜き書きの代わりに全文を出す（照合できない引用だけ別に出す）
+  // 概要と結論: 根拠の抜き書きの代わりに原文（アブストラクト・結論の節）を出す（照合できない引用だけ別に出す）
+  var absText = fig.isOverview ? fig.abstract_text : fig.isConclusion ? fig.source_text : '';
+  var isAbs = !!absText;
   if (step) {
     h += '<div class="ph">ステップ ' + (st.stepIndex + 1) + ' / ' + fig.steps.length;
     if (step.kind === 'background') h += '<span class="tg bg">一般知識</span>';
@@ -70,7 +72,11 @@ function buildPanel(fi, st) {
       h += '<div class="none">本文・キャプションに無い数値: ' + step.unsupported_numbers.map(esc).join('、') +
            (step.kind === 'figure_read' ? '（図の中の文字から読んだ値。図で確かめてください）' : '') + '</div>';
     }
-    var ev = (step.evidence || []).filter(function (e) { return !isAbs || e.verified === false; });
+    // 原文を出す画面では、原文の中で蛍光ペンを引けない引用（照合できない・結論の節の外から引いた）だけを別に出す
+    var flat = isAbs ? absText.replace(/\s+/g, ' ') : '';
+    var ev = (step.evidence || []).filter(function (e) {
+      return !isAbs || e.verified === false || flat.indexOf(String(e.quote || '').replace(/\s+/g, ' ').trim()) < 0;
+    });
     if (!isAbs || ev.length) h += '<div class="sec">根拠</div>';
     if (!ev.length && !isAbs) h += '<div class="none">' + (step.kind === 'background' ? '本文の根拠なし（一般知識として説明）' : '根拠の引用はありません') + '</div>';
     ev.forEach(function (e) {
@@ -80,7 +86,8 @@ function buildPanel(fi, st) {
     (step.warnings || []).forEach(function (w) { h += '<div class="wn">注意: ' + esc(w) + '</div>'; });
   }
   if (isAbs) {
-    h += '<div class="sec">アブストラクト全文</div><div class="abs">' + abstractHtml(fig.abstract_text, step && step.evidence) + '</div>';
+    h += '<div class="sec">' + (fig.isConclusion ? '原文（' + esc(fig.source_where || '本文') + '）' : 'アブストラクト全文') +
+         '</div><div class="abs">' + abstractHtml(absText, step && step.evidence) + '</div>';
     $('panel').innerHTML = h;
     var mk = $('panel').querySelector('mark');
     $('panel').scrollTop = mk ? Math.max(0, mk.offsetTop - 60) : 0;

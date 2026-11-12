@@ -53,7 +53,8 @@ FIG_MIN_RATIO = 1.5             # 可逆が非可逆のこの倍率以内なら�
 FIG_TILE = 48                   # 崩れを見る区画の一辺
 FIG_RULE = f"q{FIG_QUALITY}t{FIG_MIN_TILE_PSNR}r{FIG_MIN_RATIO}"     # 基準を変えたら溜め置きを作り直す
 # 配ってはいけない文字列（手元のパス・原本の名前）。data URL を除いた本文で探す（base64 の偶然の一致を避ける）
-_LEAK = re.compile(r'/mnt/[a-z]/|[A-Za-z]:\\|source\.pdf|Users[\\/]+[\w.-]+[\\/]|%PDF-')
+# ドライブ名は直前が英数字でないときだけ（JSON の中の「groups:\nAliphatic」の s:\ を拾った。2026-11-09）
+_LEAK = re.compile(r'/mnt/[a-z]/|(?<![A-Za-z0-9])[A-Za-z]:\\|source\.pdf|Users[\\/]+[\w.-]+[\\/]|%PDF-')
 ALLOWED = {".html", ".jpg", ".webp", ".txt", ".json"}
 DOC_HTML = ROOT / "web" / "static" / "doc.html"
 # 原文のページ画像の幅・形式・品質。WebP q70 は JPEG q75 の 66% で字の読みやすさは同じ（2 倍で比較）。縮小は小さいので JPEG のまま
@@ -183,7 +184,7 @@ def split_assets(bundle: dict, public: Path, cache: Path | None = None) -> None:
     """bundle の図と声を別ファイルへ出し、bundle には URL だけを残す。図は WebP にする（大きさは変えないので注記はそのまま乗る）。
     声は図ごとに data URL の配列へ束ねる。1 本ずつだとファイル数の上限に早く当たり、
     Static Assets は Range を返さないので new Audio(url) では Safari で鳴らない恐れがある。"""
-    for fig in bundle.get("figures", []) + ([bundle["overview"]] if bundle.get("overview") else []):
+    for fig in bundle.get("figures", []) + [bundle[k] for k in ("overview", "conclusion") if bundle.get(k)]:
         img = fig.get("img") or ""
         if img.startswith("data:"):
             head, body = img.split(",", 1)
@@ -278,7 +279,7 @@ def tag_chips(items: list[dict]) -> str:
 def index_html(items: list[dict]) -> str:
     cards = []
     chips = tag_chips(items)
-    for p in items:
+    for i, p in enumerate(items):        # items は登録の新しい順。i は並び替えの「登録が新しい順」に使う
         e = html.escape
         s = p["shelf"]
         first = s["first_author"]
@@ -294,7 +295,8 @@ def index_html(items: list[dict]) -> str:
         img = f'<img src="/t/{e(p["pid"])}.jpg" alt="" loading="lazy">' if p["thumb"] else ""
         # 検索は画面に出ていない正式名・全員の名前・DOI でも当たる
         key = e(" ".join(str(x) for x in (p["title"], p["authors"], s["search"], s["year"], p["doi"], p["pid"], *tags)).lower())
-        cards.append(f'''<a class="card" data-q="{key}" data-tags="{tag_data}" href="/p/{e(p["pid"])}.html">
+        sort_data = f'data-i="{i}" data-year="{e(str(s["year"]))}" data-author="{e(first)}"'
+        cards.append(f'''<a class="card" data-q="{key}" data-tags="{tag_data}" {sort_data} href="/p/{e(p["pid"])}.html">
   <div class="thumb">{img}{tagrow}</div>
   <div class="body"><div class="title">{e(p["title"])}</div>
   <div class="who" title="{e(p["authors"])}">{who_html}</div>
@@ -311,8 +313,10 @@ def index_html(items: list[dict]) -> str:
 body {{ margin:0; background:var(--bg); color:var(--ink); font:15px/1.6 "Hiragino Sans","Yu Gothic UI","Meiryo",system-ui,sans-serif; }}
 main {{ max-width:1400px; margin:0 auto; padding:24px 16px 64px; }}
 h1 {{ font-size:22px; margin:0 0 4px; }} .lead {{ color:var(--sub); margin:0 0 14px; font-size:14px; }}
-#q {{ display:block; width:100%; max-width:420px; margin:0 0 18px; padding:9px 12px; border:1px solid var(--line); border-radius:10px;
+.find {{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:0 0 18px; }}
+#q {{ flex:1 1 260px; max-width:420px; padding:9px 12px; border:1px solid var(--line); border-radius:10px;
       background:var(--card); color:var(--ink); font:inherit; font-size:14px; }}
+#sort {{ padding:9px 10px; border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--ink); font:inherit; font-size:14px; }}
 .grid {{ display:grid; grid-template-columns:repeat(auto-fill, 280px); gap:16px; justify-content:start; }}
 .card {{ display:flex; flex-direction:column; background:var(--card); border:1px solid var(--line); border-radius:18px;
         overflow:hidden; color:inherit; text-decoration:none; width:280px; height:340px; transition:border-color .15s, transform .15s; }}
@@ -338,7 +342,9 @@ h1 {{ font-size:22px; margin:0 0 4px; }} .lead {{ color:var(--sub); margin:0 0 1
 </style></head><body><main>
 <h1>論文の図の解説</h1>
 <p class="lead">図ごとに軸の意味と読みどころを、枠・赤丸・音声で解説します。カードを押すと再生画面になります。</p>
-<input type="search" id="q" placeholder="題・著者・雑誌・年・タグで探す（{len(items)} 本）" autocomplete="off">
+<div class="find"><input type="search" id="q" placeholder="題・著者・雑誌・年・タグで探す（{len(items)} 本）" autocomplete="off">
+<select id="sort" title="並び順"><option value="added">登録が新しい順</option><option value="year_new">年が新しい順</option>
+<option value="year_old">年が古い順</option><option value="author">著者名順（A→Z）</option></select></div>
 {chips}<div class="grid" id="grid">{"".join(cards) or '<p class="lead">まだありません</p>'}</div>
 <p class="lead" id="none" hidden>当てはまる論文がありません</p>
 </main><script>
@@ -366,6 +372,21 @@ chips.forEach(c => {{ c.onclick = () => {{
   try {{ localStorage.setItem('pfe.sitetag', sel); }} catch (e) {{}}
   apply();
 }}; }});
+// 並び順（施主 2026-11-09「著者名か年代順に並び替え」）。カードを並べ直すだけ。年・著者の無い本はどの順でも最後
+const sortSel = document.getElementById('sort');
+const yearOf = c => Number(c.dataset.year) || null, authorOf = c => c.dataset.author || '';
+const byYear = dir => (a, b) => {{ const x = yearOf(a), y = yearOf(b); return x && y ? dir * (x - y) : !x - !y; }};
+const byAuthor = (a, b) => {{ const x = authorOf(a), y = authorOf(b); return x && y ? x.localeCompare(y, 'en', {{sensitivity: 'base'}}) : !x - !y; }};
+const byAdded = (a, b) => a.dataset.i - b.dataset.i;
+const SORTS = {{added: [byAdded], year_new: [byYear(-1), byAuthor, byAdded], year_old: [byYear(1), byAuthor, byAdded], author: [byAuthor, byYear(1), byAdded]}};
+function reorder() {{
+  const cmp = SORTS[sortSel.value] || SORTS.added;
+  document.getElementById('grid').append(...[...cards].sort((a, b) => {{ for (const f of cmp) {{ const r = f(a, b); if (r) return r; }} return 0; }}));
+}}
+try {{ sortSel.value = localStorage.getItem('pfe.sitesort') || 'added'; }} catch (e) {{}}
+if (!sortSel.value) sortSel.value = 'added';      // 覚えていた値が今の選択肢に無い
+sortSel.onchange = () => {{ try {{ localStorage.setItem('pfe.sitesort', sortSel.value); }} catch (e) {{}} reorder(); }};
+reorder();
 apply();
 try {{
   const y = sessionStorage.getItem('pfe.scroll'); sessionStorage.removeItem('pfe.scroll');

@@ -173,6 +173,9 @@ def test_shelf_card_shows_year_short_journal_and_family_names(tmp_path, monkeypa
     for word in ("acs sustainable chemistry", "acs sustainable chem eng", "xianzhi meng", "ragauskas", "2018", "10.1021/x"):
         assert word in key
     assert not re.search(r"<span>\d{4}-\d{2}-\d{2}</span>", page)       # 登録日はカードの表に出さない（title だけ）
+    # 並び替え（施主 2026-11-09「著者名か年代順に並び替え」）: 選択肢と、カードに並べ直す鍵
+    assert '<select id="sort"' in page and 'value="year_old"' in page and 'value="author"' in page
+    assert 'data-i="0" data-year="2018" data-author="Meng"' in page
 
 
 def test_build_skips_private_and_pdf(tmp_path, monkeypatch):
@@ -304,3 +307,14 @@ def test_check_ignores_base64_lookalikes(tmp_path):
     # 画像の base64 の中に偶然 /mnt/g/ が現れても誤検知しない
     (tmp_path / "ok.html").write_text("data:image/png;base64,AA/mnt/g/AA", encoding="utf-8")
     assert ex.check(tmp_path) == []
+
+
+def test_check_ignores_colon_before_escaped_newline_but_catches_drives(tmp_path):
+    # 表の引用「Functional groups:」＋改行は JSON で groups:\n になる。s:\ をドライブ名と見ない（balakshin2020 で誤検知）
+    (tmp_path / "ok.html").write_text(json.dumps({"quote": "Functional groups:\nAliphatic OH"}), encoding="utf-8")
+    assert ex.check(tmp_path) == []
+    # 直前が英数字でなければ、今まで通りドライブ名として止める
+    for i, s in enumerate([r'"C:\Users\x', r'(G:\\001', r' D:\tmp']):
+        (tmp_path / f"bad{i}.html").write_text(s, encoding="utf-8")
+    bad = " ".join(ex.check(tmp_path))
+    assert "bad0.html" in bad and "bad1.html" in bad and "bad2.html" in bad

@@ -17,6 +17,7 @@ import sys
 import threading
 from pathlib import Path
 
+from pfe.build import reading_order
 from pfe.meta import paper_meta
 from web.db import DB, sha256_file
 
@@ -147,8 +148,8 @@ class Jobs:
                 self.db.upsert(pid, status="failed", message=f"図・本文の読み取りに失敗: {tail}")
                 return
         meta = paper_meta(d)                      # 人が直した題があればそれを使う
-        order = [f["id"] for f in json.loads((d / "figures.json").read_text(encoding="utf-8"))
-                 if (f["id"].startswith("fig") or f["id"].startswith("table") and f.get("clip"))]   # 図と表
+        order = [f["id"] for f in reading_order(json.loads((d / "figures.json").read_text(encoding="utf-8")))
+                 if (f["id"].startswith("fig") or f["id"].startswith("table") and f.get("clip"))]   # 図と表（ページの若い順）
         self.db.upsert(pid, title=meta.get("title"), authors=meta.get("authors") or [], year=meta.get("year"),
                        doi=meta.get("doi") or row["doi"], journal=meta.get("journal"))
         targets = [f for f in order if f in set(row["figs"])] if row["figs"] else order
@@ -187,6 +188,13 @@ class Jobs:
 
         msg = f"{len(failed)} 図は解析できませんでした（{', '.join(failed)}）" if failed else None
         self.db.upsert(pid, status="done", current=None, message=msg)
+        # 3. タグを自動で付ける（1 本につき 1 回。失敗しても論文の追加は成功のまま・pfe/autotag.py）
+        try:
+            from pfe.autotag import auto_tag
+            auto_tag(d, WORK)
+        except Exception as e:                    # 鍵が無い・API の失敗など
+            with log.open("a", encoding="utf-8") as fh:
+                fh.write(f"[autotag] 付けられなかった: {e!r}\n")
 
     @staticmethod
     def _bundle_ids(d: Path) -> list[str]:

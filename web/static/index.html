@@ -88,6 +88,11 @@
   .filters { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
   #q { max-width: 420px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card);
        color: var(--ink); font: inherit; font-size: 14px; }
+  /* 並び順（施主 2026-11-09「著者名か年代順に並び替え」） */
+  .find { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .find #q { flex: 1 1 260px; }
+  #sort { padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink);
+          font: inherit; font-size: 14px; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .chip { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 99px; padding: 6px 14px;
           font: inherit; font-size: 13px; cursor: pointer; min-height: 34px; }
@@ -123,7 +128,15 @@
     <a class="make" id="tomake" href="/make" hidden>＋ 解説を作る</a>
   </header>
   <div class="filters">
-    <input type="search" id="q" placeholder="題・著者・雑誌・年で探す" autocomplete="off">
+    <div class="find">
+      <input type="search" id="q" placeholder="題・著者・雑誌・年で探す" autocomplete="off">
+      <select id="sort" title="並び順">
+        <option value="added">登録が新しい順</option>
+        <option value="year_new">年が新しい順</option>
+        <option value="year_old">年が古い順</option>
+        <option value="author">著者名順（A→Z）</option>
+      </select>
+    </div>
     <div class="chips" id="chips" hidden></div>
   </div>
   <div class="grid" id="grid"><div class="empty">読み込み中…</div></div>
@@ -249,13 +262,24 @@ function destTag() { return MAKE && !noDest && tags.some(t => t.id === sel) ? se
 function shown() {
   // 空白で区切ると全部を含むものだけ（Meng 2018 のように探せる）。画面に出ていない正式名・全員の名前・DOI でも当たる
   const words = ($('q').value || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
-  return papers.filter(p => {
+  return sorted(papers.filter(p => {
     if (MAKE && sel === 'none' && (p.tags || []).length) return false;
     if (MAKE && sel !== 'all' && sel !== 'none' && !(p.tags || []).some(t => t.id === sel)) return false;
     const s = p.shelf || {};
     const hay = [p.title, p.authors, p.journal, p.year, p.doi, p.pid, s.search, s.year].join(' ').toLowerCase();
     return words.every(w => hay.includes(w));
-  });
+  }));
+}
+
+// 並び順。「登録が新しい順」はサーバの並び（登録の新しい順）のまま。年の無い本・著者の無い本はどの順でも最後
+const yearOf = p => Number((p.shelf || {}).year || p.year) || null;
+const authorOf = p => String((p.shelf || {}).first_author || p.authors || '').trim();
+const byYear = dir => (a, b) => { const x = yearOf(a), y = yearOf(b); return x && y ? dir * (x - y) : !x - !y; };
+const byAuthor = (a, b) => { const x = authorOf(a), y = authorOf(b); return x && y ? x.localeCompare(y, 'en', {sensitivity: 'base'}) : !x - !y; };
+const SORTS = {year_new: [byYear(-1), byAuthor], year_old: [byYear(1), byAuthor], author: [byAuthor, byYear(1)]};
+function sorted(list) {
+  const cmp = SORTS[$('sort').value];
+  return cmp ? [...list].sort((a, b) => cmp[0](a, b) || cmp[1](a, b)) : list;
 }
 
 function renderChips() {
@@ -369,6 +393,10 @@ $('tagpop').onclick = async e => {
 $('tagpop').onkeydown = e => { if (e.key === 'Enter' && e.target.id === 'poptag') { e.preventDefault(); $('tagpop').querySelector('[data-popnew]').click(); } };
 document.addEventListener('mousedown', e => { if (pop && !e.target.closest('#tagpop') && !e.target.closest('[data-tagpop]')) closePop(); });
 $('q').oninput = () => render();
+// 選んだ並び順はこのブラウザに覚える（保存できない環境でも動く）
+try { $('sort').value = localStorage.getItem('pfe.sort') || 'added'; } catch (e) {}
+if (!$('sort').value) $('sort').value = 'added';      // 覚えていた値が今の選択肢に無い
+$('sort').onchange = () => { try { localStorage.setItem('pfe.sort', $('sort').value); } catch (e) {} render(); };
 
 $('tomake').hidden = MAKE;
 $('file').onchange = e => { sendPdf(e.target.files[0]); e.target.value = ''; };

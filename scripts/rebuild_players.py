@@ -9,6 +9,7 @@ bundle.json に無い項目は次のように補う:
   - 図のページ番号（figures.json の page）
   - 人が直した題（meta_override.json）
   - 概要の画面に出すアブストラクトの全文（abstract.json）
+  - 図・表の並び（ページの若い順。figures.json の位置）
 """
 import sys
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -21,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "player"))
 from build_player import build  # noqa: E402
+from pfe.build import reading_order  # noqa: E402
 from pfe.meta import paper_meta  # noqa: E402
 
 WORK = ROOT / "work"
@@ -36,6 +38,15 @@ def fill_bundle(d: Path) -> bool:
     for f in b.get("figures", []):
         if f.get("page") is None and pages.get(f["id"]) is not None:
             f["page"] = pages[f["id"]]
+            changed = True
+    # 図・表をページの若い順に（2026-11-10。前は図のあとに表）。並びは figures.json の位置で決める
+    if (d / "figures.json").exists():
+        pos = {f["id"]: i for i, f in enumerate(reading_order(
+            json.loads((d / "figures.json").read_text(encoding="utf-8"))))}
+        now = b.get("figures", [])
+        new = sorted(now, key=lambda f: pos.get(f["id"], len(pos)))
+        if [f["id"] for f in new] != [f["id"] for f in now]:
+            b["figures"] = new
             changed = True
     ov = b.get("overview")
     if ov and not ov.get("abstract_text") and (d / "abstract.json").exists():      # 概要の画面に全文を出す（2026-11-05）

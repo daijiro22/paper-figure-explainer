@@ -173,7 +173,7 @@ function probeDoc() {
 function docUrl(embed) {
   var cur = figures[S.fi];        // 概要ならアブストラクトのページへ
   return '/make/doc/' + DOC_PID + (embed ? '?embed=1' : '') +
-         (cur.isOverview ? '#p=' + (cur.page || 1) : '#fig=' + encodeURIComponent(cur.id));
+         (cur.isOverview || cur.isConclusion ? '#p=' + (cur.page || 1) : '#fig=' + encodeURIComponent(cur.id));
 }
 /* サイドバーを今の図のページへ。図が変わったときだけ動かす（読んでいる位置を勝手に動かさない）。
    location.replace はブラウザの「戻る」の履歴を増やさない */

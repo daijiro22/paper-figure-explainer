@@ -14,7 +14,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
+
+# 文字だけの段（概要・結論・タグ）のモデル。図を読む解析（pfe/analyze.py の PFE_API_MODEL・Opus）より安い Sonnet にする
+# （施主 2026-11-10「文字の段だけ」。料金は Opus 5.5 の半分）
+TEXT_MODEL = os.environ.get("PFE_TEXT_MODEL", "claude-sonnet-5-5")
 
 SECTIONS = ["背景", "目的", "方法", "結果", "結論"]
 SCHEMA = {
@@ -91,8 +96,8 @@ def _with_point(st: dict) -> dict:
 
 def check(a: dict, abstract: str, fig_ids: list[str]) -> list[str]:
     """根拠の実在・原文に無い数値・図の id を検査する（空なら合格）。"""
-    from pfe.analyze import MIN_QUOTE, _norm_space, unsupported_numbers
-    src = _norm_space(abstract)
+    from pfe.analyze import match_key, quote_ok, unsupported_numbers
+    src = match_key(abstract)
     errs = []
     steps = a.get("steps", [])
     if not 2 <= len(steps) <= 8:
@@ -102,10 +107,9 @@ def check(a: dict, abstract: str, fig_ids: list[str]) -> list[str]:
         if not evs:
             errs.append(f"steps[{i}]: evidence が無い（アブストラクトから引用する）")
         for ev in evs:
-            q = _norm_space(ev.get("quote", ""))
             if ev.get("source") != "abstract":
                 errs.append(f"steps[{i}]: source は \"abstract\" だけ")
-            elif len(q) < MIN_QUOTE or q not in src:
+            elif not quote_ok(ev.get("quote", ""), src):
                 errs.append(f"steps[{i}]: 引用「{ev.get('quote', '')[:40]}…」がアブストラクトに見つからない（そのまま写す）")
         bad = unsupported_numbers(_with_point(st), {"abstract": abstract}, set())
         if bad:
@@ -144,7 +148,7 @@ def analyze_overview(work: Path, title: str, abstract: str, fig_ids: list[str], 
     for attempt in range(2):                  # 検査に落ちたら、指摘を添えて 1 回だけ頼み直す
         p = prompt if not errs else prompt + "\n\n## 前回の答えの問題（直して全体を出し直す）\n" + "\n".join(f"- {e}" for e in errs)
         try:
-            a = call_api(p, [], schema_path, raw)
+            a = call_api(p, [], schema_path, raw, model=TEXT_MODEL)
         except DriverError as e:
             print(f"  概要: API の呼び出しに失敗: {e}")
             return None
@@ -197,7 +201,7 @@ def compose_map(work: Path, ids: list[str], labels: dict[str, str], out: Path) -
 
 def overview_entry(work: Path, a: dict, abstract: dict, fig_ids: list[str], no_tts: bool) -> dict:
     """bundle["overview"]（player が図の列の先頭に「概要」として並べる。図の解説と同じ形）。"""
-    from pfe.analyze import MIN_QUOTE, _norm_space, unsupported_numbers
+    from pfe.analyze import match_key, quote_ok, unsupported_numbers
     figs = {f["id"]: f for f in json.loads((work / "figures.json").read_text(encoding="utf-8"))}
     labels = {fid: figs.get(fid, {}).get("label") or fid for fid in fig_ids}
     # 地図に並べる図: 台本で使った図（図の順）。足りなければ先頭の図で埋める
@@ -210,11 +214,11 @@ def overview_entry(work: Path, a: dict, abstract: dict, fig_ids: list[str], no_t
         from PIL import Image
         Image.new("RGB", (1800, 1080), "white").save(out_png)
         boxes = {}
-    src = _norm_space(abstract["text"])
+    src = match_key(abstract["text"])
     steps = []
     for st in a["steps"]:
         evs = [{"source": "abstract", "where": "アブストラクト", "quote": e["quote"],
-                "verified": len(_norm_space(e["quote"])) >= MIN_QUOTE and _norm_space(e["quote"]) in src}
+                "verified": quote_ok(e["quote"], src)}
                for e in st.get("evidence", [])]
         bad = unsupported_numbers(_with_point(st), {"abstract": abstract["text"]}, set())
         kind = "fact" if any(e["verified"] for e in evs) and not bad else "unverified"

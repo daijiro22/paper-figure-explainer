@@ -156,7 +156,9 @@ function setBundle(b) {
   // 概要（アブストラクトの解説）があれば、図の列の先頭に置いて最初に流す（施主 2026-10-30「概要を把握してから読みたい」）。
   // bundle の figures は変えない（図の数・?fig=fig3 の指定はそのまま）
   var list = (b.overview && (b.overview.steps || []).length ? [Object.assign({isOverview: true}, b.overview)] : [])
-             .concat(b.figures || []);
+             .concat(b.figures || [])
+             // 結論（論文全体のまとめ）は最後に（施主 2026-11-10「すべての図の解説が終わったら結論まで」）
+             .concat(b.conclusion && (b.conclusion.steps || []).length ? [Object.assign({isConclusion: true}, b.conclusion)] : []);
   figures = list.map(function (f) {
     f.width = f.width || 1800; f.height = f.height || 1080; f._tl = null; return f;
   });

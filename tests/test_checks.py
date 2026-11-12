@@ -51,6 +51,18 @@ def test_short_quote_rejected():
     assert any("短すぎる" in e for e in check_analysis(a, GEOM, SRC))
 
 
+def test_quote_matches_across_width_and_line_breaks():
+    # 原文の改行の空白・行末ハイフン・全角の数字の違いで、実在する引用を [要確認] にしない（nishikiori2015・lee1990）
+    src = {"para:p1": "リグニンと多糖類がそれぞれ0.6および0.25ほどの変換率で関与 しているThis indi- cates that wood lignin also"}
+    out = verify_steps([step("比率です", quote="それぞれ０．６および０．２５ほどの変換率で関与している")], src, {})
+    assert out[0]["evidence"][0]["verified"] is True
+    out = verify_steps([step("反応です", quote="This indi-cates that wood lignin")], src, {})
+    assert out[0]["evidence"][0]["verified"] is True
+    # 空白を消しても短い引用は通さない（長さは空白を詰めた形で測る）
+    out = verify_steps([step("短い", quote="0 . 6 および")], src, {})
+    assert out[0]["evidence"][0]["verified"] is False
+
+
 def test_misread_tick_rejected_at_one_percent():
     # 200 を 210 と読み違えた（残差 1.6%）較正は通さない（指摘 5）
     with pytest.raises(R.CalibrationError):
@@ -86,3 +98,17 @@ def test_api_answer_with_extra_object():
     assert _first_answer_object('{"note": "a"}\n\n' + json.dumps(ans)) == ans
     assert _first_answer_object(json.dumps(ans) + '\n{"extra": 1}') == ans
     assert _first_answer_object('{"note": "a"} 説明') is None
+
+
+def test_reading_order_mixes_kinds_by_page_and_keeps_numbering():
+    """図・表をページの若い順に。種類ごとの番号の順と「続き」は崩さない（smith2016 の表 1 の続き）。"""
+    from pfe.build import reading_order
+    figs = [
+        {"id": "fig1", "page": 2, "clip": [0, 300, 0, 0], "layout": "left"},
+        {"id": "fig2", "page": 5, "clip": [0, 60, 0, 0], "layout": "full"},
+        {"id": "table1", "page": 4, "clip": [0, 700, 0, 0], "layout": "left"},
+        {"id": "table1-cont", "page": 4, "clip": [0, 60, 0, 0], "layout": "left"},
+        {"id": "table2", "page": 2, "clip": [0, 100, 0, 0], "layout": "right"},
+        {"id": "tableS1", "page": 1, "clip": [0, 50, 0, 0], "layout": "full"},
+    ]
+    assert [f["id"] for f in reading_order(figs)] == ["tableS1", "fig1", "table1", "table1-cont", "table2", "fig2"]

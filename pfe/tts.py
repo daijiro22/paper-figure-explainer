@@ -1,6 +1,6 @@
 """ナレーション音声: ステップの say を edge-tts で mp3 にし、長さ（秒）を測る。
 
-声は edge-tts で固定（無料・有料の TTS API は使わない）。「文字列 → mp3 と長さ」の 1 関数に閉じる。同じ文・同じ声なら作り直さない（ファイル名に文の hash）。
+声はいま edge-tts（声の決めごとは CLAUDE.md の Do NOT）。「文字列 → mp3 と長さ」の 1 関数に閉じる。同じ文・同じ声なら作り直さない（ファイル名に文の hash）。
 """
 from __future__ import annotations
 
@@ -9,6 +9,8 @@ import hashlib
 import json
 import subprocess
 from pathlib import Path
+
+from pfe.yomi import to_speech
 
 VOICE = "ja-JP-KeitaNeural"   # 男性の声（ja-JP の男性は Keita だけ。施主 2026-10-29「男性で1.3倍」）
 RATE = "+30%"                 # 1.3 倍速
@@ -35,11 +37,22 @@ async def _speak(text: str, out: Path, voice: str, rate: str) -> None:
     await edge_tts.Communicate(text, voice, rate=rate).save(str(out))
 
 
-def synth(text: str, audio_dir: Path, voice: str = VOICE, rate: str = RATE) -> tuple[Path, float | None]:
-    """text を mp3 にして (パス, 秒) を返す。作成済みなら再利用する。"""
+def audio_name(spoken: str, voice: str = VOICE, rate: str = RATE) -> str:
+    """声に渡す文から mp3 の名前を作る。同じ文・同じ声なら同じ名前になり、作り直さない。"""
+    return hashlib.sha1(f"{voice}|{rate}|{spoken}".encode("utf-8")).hexdigest()[:12] + ".mp3"
+
+
+def synth(text: str, audio_dir: Path, voice: str = VOICE, rate: str = RATE,
+          *, apply_yomi: bool = True) -> tuple[Path, float | None]:
+    """text を mp3 にして (パス, 秒) を返す。作成済みなら再利用する。
+
+    読み間違える語は pfe/yomi.tsv で読みに置き換えてから声にする（字幕は変えない。施主 2026-11-08）。
+    apply_yomi=False は、すでに置き換えた文を渡すとき（読みの確認シート）。"""
+    spoken = to_speech(text) if apply_yomi else text
     audio_dir.mkdir(parents=True, exist_ok=True)
-    key = hashlib.sha1(f"{voice}|{rate}|{text}".encode("utf-8")).hexdigest()[:12]
-    out = audio_dir / f"{key}.mp3"
+    out = audio_dir / audio_name(spoken, voice, rate)
     if not out.exists() or out.stat().st_size == 0:
-        asyncio.run(_speak(text, out, voice, rate))
+        part = out.with_suffix(".part")     # 途中で止まった書きかけを完成品として再利用しないよう、書き終えてから名前を付ける
+        asyncio.run(_speak(spoken, part, voice, rate))
+        part.replace(out)
     return out, _duration(out)

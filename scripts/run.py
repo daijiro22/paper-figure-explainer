@@ -31,7 +31,7 @@ from pfe.meta import apply_override  # noqa: E402
 from pfe.tables import table_geometry  # noqa: E402
 from pfe.analyze import analyze  # noqa: E402
 from pfe.resolve import resolve_figure  # noqa: E402
-from pfe.build import figure_entry, para_where, write_bundle  # noqa: E402
+from pfe.build import figure_entry, para_where, reading_order, write_bundle  # noqa: E402
 from pfe import fetch  # noqa: E402
 
 
@@ -130,8 +130,8 @@ def main() -> int:
     para_ids = list(paras)
     where = para_where(text)
     entries_by_num = {e["num"]: e for e in refs.get("entries", [])}
-    # 図と表（施主 2026-10-30「Table とかも取れたら良い」）。表は図のあとに並ぶ（figures.json の順）
-    targets = [f for f in figs if (f["id"].startswith("fig") or f["id"].startswith("table") and f.get("clip"))]
+    # 図と表（施主 2026-10-30「Table とかも取れたら良い」）。ページの若い順に並べる（施主 2026-11-10・pfe/build.py）
+    targets = reading_order([f for f in figs if (f["id"].startswith("fig") or f["id"].startswith("table") and f.get("clip"))])
     if args.figs:
         want = set(args.figs.split(","))
         targets = [f for f in targets if f["id"] in want]
@@ -270,8 +270,21 @@ def main() -> int:
     # ---- 6. 概要（アブストラクトの解説。再生の最初に 1 回だけ流す） ----
     overview = None if args.no_overview else make_overview(work, doc, meta, figs, bundle_figs, args)
 
+    # ---- 6b. 結論（全部の図・表のあとに 1 回だけ流す。図・表がそろってから作る・pfe/conclusion.py） ----
+    conclusion = None
+    if not args.no_overview:
+        ids = [b["id"] for b in bundle_figs]
+        all_ids = [f["id"] for f in figs if (f["id"].startswith("fig") or f["id"].startswith("table") and f.get("clip"))]
+        if set(ids) == set(all_ids) or (work / "fig" / "conclusion.analysis.json").exists():
+            from pfe.conclusion import make_conclusion
+            print("■ 結論")
+            conclusion = make_conclusion(work, meta.get("title") or work.name, ids,
+                                         args.driver if set(ids) == set(all_ids) else "manual", args.no_tts)
+        else:
+            print("■ 結論: 図・表がまだそろっていないので、あとで作る")
+
     # ---- 7. 組み立て ----
-    write_bundle(work / "bundle.json", meta, bundle_figs, overview)
+    write_bundle(work / "bundle.json", meta, bundle_figs, overview, conclusion)
     sys.path.insert(0, str(ROOT / "player"))
     from build_player import build
     build(str(work / "bundle.json"), str(work / "player.html"))
